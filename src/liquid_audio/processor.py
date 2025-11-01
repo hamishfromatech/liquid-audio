@@ -87,7 +87,9 @@ class LFM2AudioProcessor:
         from safetensors.torch import load_file
 
         mimi_model = moshi.models.loaders.get_mimi(None, device=self.device)
-        mimi_weights = load_file(self.mimi_weights_path, device=str(self.device))
+        # Convert device to string and strip index for safetensors compatibility
+        device_str = str(self.device).split(":")[0] if ":" in str(self.device) else str(self.device)
+        mimi_weights = load_file(self.mimi_weights_path, device=device_str)
         mimi_model.load_state_dict(mimi_weights, strict=True)
 
         return mimi_model

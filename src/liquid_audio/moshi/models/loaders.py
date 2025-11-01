@@ -324,7 +324,9 @@ def get_mimi(
     model.eval()
     if filename is not None:
         if _is_safetensors(filename):
-            state = load_file(filename, device=str(device))
+            # Convert device to string and strip index for safetensors compatibility
+            device_str = str(device).split(":")[0] if ":" in str(device) else str(device)
+            state = load_file(filename, device=device_str)
             model.load_state_dict(state)
         else:
             pkg = torch.load(filename, "cpu")
@@ -381,7 +383,9 @@ def get_moshi_lm(
 
     if filename is not None:
         if _is_safetensors(filename):
-            state = load_file(filename, device=str(device))
+            # Convert device to string and strip index for safetensors compatibility
+            device_str = str(device).split(":")[0] if ":" in str(device) else str(device)
+            state = load_file(filename, device=device_str)
             for key, value in state.items():
                 if value.dtype.is_floating_point:
                     if key.startswith('condition_provider.') or key.startswith('fuser.'):
@@ -468,7 +472,9 @@ def get_lora_moshi(
     replace_all_linear_with_lora(model, lora_rank, lora_scaling, device=init_device)
     if lora_weights is not None:
         assert _is_safetensors(lora_weights), "LoRA weights must be a safetensors file."
-        lora_state_dict = load_file(lora_weights, device=str(device))
+        # Convert device to string and strip index for safetensors compatibility
+        device_str = str(device).split(":")[0] if ":" in str(device) else str(device)
+        lora_state_dict = load_file(lora_weights, device=device_str)
         for key, value in lora_state_dict.items():
             if value.dtype.is_floating_point:
                 value = value.to(dtype=dtype)

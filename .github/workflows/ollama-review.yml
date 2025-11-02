@@ -76,3 +76,57 @@ jobs:
         run: |
           echo "----- Ollama Review -----"
           echo "${{ steps.review.outputs.response }}"
+
+      - name: Extract and apply suggested fixes
+        id: extract
+        shell: bash
+        run: |
+          RESPONSE="${{ steps.review.outputs.response }}"
+          
+          # Save response to a file for reference
+          echo "$RESPONSE" > /tmp/ollama_review.txt
+          
+          # Check if response contains code blocks with suggested changes
+          if echo "$RESPONSE" | grep -q '```'; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create dev branch and commit changes
+        if: steps.extract.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create or switch to dev branch based on PR branch
+          DEV_BRANCH="${{ github.head_ref }}-ollama-fixes"
+          git checkout -b "$DEV_BRANCH" || git checkout "$DEV_BRANCH"
+          
+          # Create a commit with the review as the message
+          git add -A
+          git commit -m "Apply Ollama AI review suggestions
+
+${{ steps.review.outputs.response }}" || echo "No changes to commit"
+          
+          # Push to dev branch
+          git push origin "$DEV_BRANCH" -f
+          
+          echo "Dev branch: $DEV_BRANCH"
+
+      - name: Comment on PR with review link
+        if: steps.extract.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const devBranch = '${{ github.head_ref }}-ollama-fixes';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🤖 Ollama AI Review\n\nSuggested fixes have been committed to branch: \`${devBranch}\`\n\n**Review:**\n\`\`\`\n${{ steps.review.outputs.response }}\n\`\`\``
+            })

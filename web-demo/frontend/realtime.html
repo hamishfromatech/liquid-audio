@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LFM2-Audio Real-time Voice Call</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.7); }
+            70% { box-shadow: 0 0 0 40px rgba(0, 0, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+        }
+        
+        .recording { animation: pulse-ring 1.5s infinite; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        
+        .waveform {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 40px;
+        }
+        
+        .waveform-bar {
+            width: 3px;
+            background: linear-gradient(to top, #3b82f6, #8b5cf6);
+            border-radius: 2px;
+            animation: wave 0.6s ease-in-out infinite;
+        }
+        
+        @keyframes wave {
+            0%, 100% { height: 8px; }
+            50% { height: 24px; }
+        }
+    </style>
+</head>
+<body class="bg-white min-h-screen text-gray-900 flex flex-col">
+    <!-- Main Container -->
+    <div class="flex-1 flex flex-col items-center justify-center px-4">
+        <div class="flex flex-col items-center gap-8">
+            <!-- Status Display -->
+            <div class="text-center">
+                <p class="text-sm font-medium text-gray-500 mb-4" id="callStatus">Initializing...</p>
+                
+                <!-- Waveform Animation (when speaking) -->
+                <div id="waveform" class="waveform hidden justify-center mb-4">
+                    <div class="waveform-bar" style="animation-delay: 0s;"></div>
+                    <div class="waveform-bar" style="animation-delay: 0.1s;"></div>
+                    <div class="waveform-bar" style="animation-delay: 0.2s;"></div>
+                    <div class="waveform-bar" style="animation-delay: 0.3s;"></div>
+                    <div class="waveform-bar" style="animation-delay: 0.4s;"></div>
+                </div>
+            </div>
+            
+            <!-- Record Button -->
+            <button id="recordBtn" class="relative w-40 h-40 bg-black rounded-full flex items-center justify-center hover:bg-gray-900 transition shadow-2xl">
+                <i class="fas fa-microphone text-5xl text-white"></i>
+            </button>
+            
+            <!-- Stop Button (Hidden) -->
+            <button id="stopBtn" class="relative w-40 h-40 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition shadow-2xl hidden recording">
+                <i class="fas fa-stop text-5xl text-white"></i>
+            </button>
+            
+            <!-- Transcription Display -->
+            <div id="transcription" class="text-center max-w-md">
+                <p class="text-sm text-gray-600 mb-2">You:</p>
+                <p id="userText" class="text-gray-700 italic">Listening...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <div class="fixed bottom-0 left-0 right-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <!-- Settings Icon -->
+            <button id="settingsBtn" class="p-2 hover:bg-gray-200 rounded-lg transition" title="Settings">
+                <i class="fas fa-cog text-xl text-gray-600"></i>
+            </button>
+            
+            <!-- Status Text -->
+            <div class="text-center flex-1">
+                <p class="text-sm font-medium text-gray-700" id="recordStatus">Ready</p>
+            </div>
+            
+            <!-- Close Icon -->
+            <button id="closeBtn" class="p-2 hover:bg-gray-200 rounded-lg transition" title="Close">
+                <i class="fas fa-times text-xl text-gray-600"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full space-y-6 fade-in">
+            <div class="flex items-center justify-between">
+                <h2 class="text-2xl font-bold">Settings</h2>
+                <button id="closeSettingsBtn" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700">System Prompt</label>
+                <textarea id="systemPrompt" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" rows="3">You are a helpful, friendly assistant. Keep responses concise and natural.</textarea>
+            </div>
+            
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium text-gray-700">Temperature</label>
+                    <span class="text-sm text-gray-500" id="tempValue">1.0</span>
+                </div>
+                <input type="range" id="temperature" min="0" max="2" step="0.1" value="1" class="w-full">
+            </div>
+            
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium text-gray-700">Top-K</label>
+                    <span class="text-sm text-gray-500" id="topKValue">4</span>
+                </div>
+                <input type="range" id="topK" min="0" max="20" step="1" value="4" class="w-full">
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+                <button id="resetBtn" class="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition">
+                    Reset
+                </button>
+                <button id="closeSettingsBtn2" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="realtime.js"></script>
+</body>
+</html>

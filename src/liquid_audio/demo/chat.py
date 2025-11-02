@@ -9,7 +9,7 @@ from fastrtc import AdditionalOutputs, ReplyOnPause, WebRTC
 
 from liquid_audio import ChatState, LFMModality
 
-from .model import lfm2_audio, mimi, proc, device
+from .model import device, lfm2_audio, mimi, proc
 
 
 class ConversationHistory:
@@ -307,8 +307,7 @@ with gr.Blocks(
         overflow-y: auto;
     }
     """
-) as demo:
-    with gr.Column():
+) as demo, gr.Column():
         # Header
         with gr.Group(elem_classes="header-container"):
             gr.Markdown("# 🎙️ LFM2-Audio Speech Chat")
@@ -391,7 +390,7 @@ with gr.Blocks(
         # Controls
         with gr.Row():
             clear_btn = gr.Button("🔄 Reset Chat", variant="secondary", size="lg")
-            info_btn = gr.Button("ℹ️ About", variant="secondary", size="lg")
+            info_btn = gr.Button("i About", variant="secondary", size="lg")
 
         def update_history_display(history: ConversationHistory):
             return history.get_formatted_history()

@@ -3,27 +3,24 @@ FastAPI backend for LFM2-Audio voice call interface.
 Provides WebSocket and REST endpoints for real-time speech-to-speech conversations.
 """
 
-import asyncio
-import json
 import logging
+
+# Import model components
+import sys
 from collections import deque
 from queue import Queue
 from threading import Thread
-from typing import Optional
 
 import numpy as np
 import torch
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
-# Import model components
-import sys
 sys.path.insert(0, "/Users/hamishfromatech/liquid-audio/src")
 
 from liquid_audio import ChatState, LFMModality
-from liquid_audio.demo.model import lfm2_audio, mimi, proc, device
+from liquid_audio.demo.model import device, lfm2_audio, mimi, proc
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -82,8 +79,8 @@ class ConversationState:
 
 def generate_response(
     chat: ChatState,
-    temp: Optional[float] = 1.0,
-    topk: Optional[int] = 4,
+    temp: float | None = 1.0,
+    topk: int | None = 4,
 ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[LFMModality], str]:
     """Generate response from the model."""
     
@@ -187,8 +184,8 @@ async def websocket_chat(websocket: WebSocket):
                     # Skip WAV header (first 44 bytes) and convert to int16
                     audio_data = np.frombuffer(audio_bytes[44:], dtype=np.int16)
                 except ValueError as e:
-                    logger.error(f"Error decoding audio hex: {e}")
-                    await websocket.send_json({"type": "error", "message": f"Invalid audio data: {str(e)}"})
+                    logger.exception("Error decoding audio hex")
+                    await websocket.send_json({"type": "error", "message": f"Invalid audio data: {e!s}"})
                     continue
                 
                 # Add to conversation
@@ -227,7 +224,7 @@ async def websocket_chat(websocket: WebSocket):
                     })
                 
                 except Exception as e:
-                    logger.error(f"Error generating response: {e}")
+                    logger.exception("Error generating response")
                     await websocket.send_json({
                         "type": "error",
                         "message": str(e)
@@ -274,7 +271,7 @@ async def websocket_chat(websocket: WebSocket):
                     })
                 
                 except Exception as e:
-                    logger.error(f"Error generating response: {e}")
+                    logger.exception("Error generating response")
                     await websocket.send_json({
                         "type": "error",
                         "message": str(e)
@@ -297,8 +294,8 @@ async def websocket_chat(websocket: WebSocket):
                 "type": "error",
                 "message": str(e)
             })
-        except:
-            logger.error("Failed to send error message to client")
+        except Exception:
+            logger.exception("Failed to send error message to client")
 
 
 @app.get("/health")

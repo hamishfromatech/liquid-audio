@@ -5,22 +5,24 @@ Designed for web-based voice calls with minimal latency.
 
 import asyncio
 import logging
+import sys
 from collections import deque
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 import torch
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from starlette.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.websockets import WebSocketState
 
-import sys
 sys.path.insert(0, "/Users/hamishfromatech/liquid-audio/src")
 
-from liquid_audio import ChatState, LFMModality
-from liquid_audio.demo.model import lfm2_audio, mimi, proc, device
+import builtins
+import contextlib
+
+from liquid_audio import ChatState
+from liquid_audio.demo.model import lfm2_audio, mimi, proc
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,7 +61,7 @@ class AudioBuffer:
         async with self.lock:
             self.buffer.append(chunk)
     
-    async def get_chunk(self) -> Optional[np.ndarray]:
+    async def get_chunk(self) -> np.ndarray | None:
         """Get next audio chunk from buffer."""
         async with self.lock:
             if self.buffer:
@@ -96,12 +98,11 @@ async def _send_json_safe(websocket: WebSocket, payload: dict) -> bool:
         return False
     try:
         await websocket.send_json(payload)
+    except (WebSocketDisconnect, RuntimeError):
+        # Happens if disconnected or close frame already sent
+        return False
+    else:
         return True
-    except WebSocketDisconnect:
-        return False
-    except RuntimeError:
-        # Happens if close frame already sent
-        return False
 
 
 class RealtimeConversation:
@@ -320,7 +321,7 @@ async def websocket_call(websocket: WebSocket):
                                 # Skip 'data' + 4-byte size
                                 audio_data_start = data_pos + 8
                                 audio_bytes = audio_bytes[audio_data_start:]
-                        except:
+                        except Exception:
                             # If parsing fails, skip first 44 bytes
                             audio_bytes = audio_bytes[44:]
                     
@@ -341,7 +342,7 @@ async def websocket_call(websocket: WebSocket):
                         websocket,
                         {
                             "type": "error",
-                            "message": f"Invalid audio data: {str(e)}",
+                            "message": f"Invalid audio data: {e!s}",
                         },
                     )
             
@@ -361,10 +362,8 @@ async def websocket_call(websocket: WebSocket):
             elif message_type == "reset":
                 if audio_task:
                     audio_task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await audio_task
-                    except asyncio.CancelledError:
-                        pass
                 
                 conversation = RealtimeConversation(data.get("system_prompt", ""))
                 
@@ -391,13 +390,11 @@ async def websocket_call(websocket: WebSocket):
     
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
-        try:
+        with contextlib.suppress(builtins.BaseException):
             await websocket.send_json({
                 "type": "error",
                 "message": str(e)
             })
-        except:
-            pass
 
 
 @app.get("/health")

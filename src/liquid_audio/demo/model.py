@@ -9,7 +9,7 @@ from liquid_audio import LFM2AudioModel, LFM2AudioProcessor
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["lfm2_audio", "mimi", "proc", "device"]
+__all__ = ["device", "lfm2_audio", "mimi", "proc"]
 
 HF_DIR = "LiquidAI/LFM2-Audio-1.5B"
 
@@ -28,9 +28,10 @@ def get_device() -> torch.device:
         try:
             device = torch.device(device_env)
             logger.info(f"Using device from LIQUID_AUDIO_DEVICE: {device}")
-            return device
         except RuntimeError as e:
             logger.warning(f"Invalid device from LIQUID_AUDIO_DEVICE: {device_env}. Error: {e}")
+        else:
+            return device
     
     # Auto-detect best device
     if torch.cuda.is_available():
@@ -43,18 +44,20 @@ def get_device() -> torch.device:
         try:
             device = torch.device("mps")
             logger.info(f"Metal (MPS) available on macOS. Using device: {device}")
-            return device
         except RuntimeError as e:
             logger.warning(f"Metal (MPS) available but failed to initialize: {e}")
+        else:
+            return device
     
     # Check for ROCm (AMD GPU)
     if hasattr(torch, "version") and hasattr(torch.version, "hip"):
         try:
             device = torch.device("cuda")  # ROCm uses CUDA API
             logger.info(f"ROCm (AMD GPU) available. Using device: {device}")
-            return device
         except RuntimeError:
             pass
+        else:
+            return device
     
     # Fallback to CPU
     device = torch.device("cpu")

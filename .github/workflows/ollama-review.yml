@@ -109,9 +109,10 @@ jobs:
           
           # Create a commit with the review as the message
           git add -A
-          git commit -m "Apply Ollama AI review suggestions
+          REVIEW_MSG="Apply Ollama AI review suggestions
 
-${{ steps.review.outputs.response }}" || echo "No changes to commit"
+${{ steps.review.outputs.response }}"
+          git commit -m "$REVIEW_MSG" || echo "No changes to commit"
           
           # Push to dev branch
           git push origin "$DEV_BRANCH" -f

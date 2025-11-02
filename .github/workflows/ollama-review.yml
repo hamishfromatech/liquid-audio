@@ -1,0 +1,78 @@
+name: Ollama Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  review:
+    name: Generate AI review with Ollama
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare review prompt
+        id: prompt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_REF="${GITHUB_BASE_REF:-main}"
+          HEAD_REF="${GITHUB_HEAD_REF:-$GITHUB_REF}"
+
+          git fetch origin "${BASE_REF}" --depth=1
+
+          TMP_DIFF="$(mktemp)"
+          TMP_FILES="$(mktemp)"
+
+          git diff --unified=0 "origin/${BASE_REF}"...HEAD > "${TMP_DIFF}" || true
+          git diff --name-status "origin/${BASE_REF}"...HEAD > "${TMP_FILES}" || true
+
+          if [ ! -s "${TMP_DIFF}" ]; then
+            printf 'No diff detected against %s.\n' "${BASE_REF}" > "${TMP_DIFF}"
+          fi
+
+          TRUNCATED_DIFF="$(mktemp)"
+          head -c 14000 "${TMP_DIFF}" > "${TRUNCATED_DIFF}"
+
+          {
+            echo "OLLAMA_PROMPT<<'EOF'"
+            echo "You are an automated senior code reviewer."
+            echo "Analyze the proposed changes below and respond with actionable review feedback."
+            echo "Highlight logical bugs, missing tests, security/privacy issues, performance risks, and style violations."
+            echo "Focus on high-signal comments and mention specific files and lines when possible."
+            echo
+            echo "Repository: ${GITHUB_REPOSITORY}"
+            echo "Base ref: ${BASE_REF}"
+            echo "Head ref: ${HEAD_REF}"
+            echo
+            echo "Changed files:"
+            cat "${TMP_FILES}"
+            echo
+            echo "Unified diff (truncated to 14000 bytes):"
+            cat "${TRUNCATED_DIFF}"
+            echo
+            echo "Respond with a structured review in Markdown."
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
+      - name: Run Ollama review
+        id: review
+        uses: ai-action/ollama-action@v1
+        with:
+          model: minimax-m2:cloud
+          prompt: ${{ env.OLLAMA_PROMPT }}
+          cache: 'true'
+
+      - name: Show review output
+        run: |
+          echo "----- Ollama Review -----"
+          echo "${{ steps.review.outputs.response }}"

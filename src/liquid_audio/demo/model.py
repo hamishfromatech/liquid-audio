@@ -18,27 +18,29 @@ def get_device() -> torch.device:
     """
     Detect and return the best available device.
     Priority: CUDA > Metal (macOS) > ROCm (AMD) > CPU
-    
+
     Can be overridden with LIQUID_AUDIO_DEVICE environment variable.
     Valid values: "cuda", "mps", "cpu", "rocm" (or any valid torch device string)
     """
     device_env = os.environ.get("LIQUID_AUDIO_DEVICE", "").lower().strip()
-    
+
     if device_env:
         try:
             device = torch.device(device_env)
             logger.info(f"Using device from LIQUID_AUDIO_DEVICE: {device}")
         except RuntimeError as e:
-            logger.warning(f"Invalid device from LIQUID_AUDIO_DEVICE: {device_env}. Error: {e}")
+            logger.warning(
+                f"Invalid device from LIQUID_AUDIO_DEVICE: {device_env}. Error: {e}"
+            )
         else:
             return device
-    
+
     # Auto-detect best device
     if torch.cuda.is_available():
         device = torch.device("cuda")
         logger.info(f"CUDA available. Using device: {device}")
         return device
-    
+
     # Check for Metal (macOS GPU)
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         try:
@@ -48,7 +50,7 @@ def get_device() -> torch.device:
             logger.warning(f"Metal (MPS) available but failed to initialize: {e}")
         else:
             return device
-    
+
     # Check for ROCm (AMD GPU)
     if hasattr(torch, "version") and hasattr(torch.version, "hip"):
         try:
@@ -58,7 +60,7 @@ def get_device() -> torch.device:
             pass
         else:
             return device
-    
+
     # Fallback to CPU
     device = torch.device("cpu")
     logger.info(f"No GPU available. Using device: {device}")
